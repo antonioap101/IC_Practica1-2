@@ -1,6 +1,12 @@
 /* ======================================================================= *\
- *  Ejemplo ChibiOS-3
- *  Este ejemplo muestra cómo estimar la carga computacional de cada hebra
+ *  EJERCICIO ENTREGABLE:
+ *  En este ejercicio, tomando como punto de partida el ejempolo del EJERCICIO 3, en
+ *  el que se muestra cómo estimar la carga computacional de cada hebra, se desarrolla
+ *  un esquema de monitorización que permite balancear la carga computacional en el 
+ *  microprocesador y llevarla a una condición “óptima”, definida como aquella en la que
+ *  la utilización del procesador no supera el 85% (15% del tiempo en la tarea idle/loop) 
+ *  y las tareas se ejecutan respetando el periodo establecido, pero con el máximo posible
+ *  de intensidad computacional.
  *  
  *  IMPORTANTE: en ChRt/src/rt/templates/chconf.h
  *    - CH_DBG_THREADS_PROFILING debe activarse (TRUE) 
@@ -9,6 +15,10 @@
  *  Requiere el uso de la librería ChRt de Bill Greiman
  *    https://github.com/greiman/ChRt
  *    
+ *  AUTORES:
+ *   - Antonio Aparicio González
+ *   - Daniel Díaz Martel
+ *
  *  Asignatura (GII-IoT)
 \* ======================================================================= */ 
 #include <ChRt.h>
