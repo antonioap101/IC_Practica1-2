@@ -41,6 +41,10 @@ char thread_name[NUM_THREADS][15] = { "top",
 volatile uint32_t threadPeriod_ms[NUM_THREADS] = { CYCLE_MS, 200, 100, 200, 0 };
 volatile int threadLoad[NUM_THREADS] = {0, 50, 50, 50, 0};
 
+// Define un valor mínimo y máximo de carga para cada hebra
+volatile int threadMinLoad[NUM_THREADS] = {0, 20, 20, 20, 0}; // Por ejemplo, estos valores pueden ser ajustados según las necesidades.
+volatile int threadMaxLoad[NUM_THREADS] = {0, 100, 100, 100, 0}; // Establece un valor máximo arbitrario. Se puede ajustar según las necesidades.
+
 volatile uint32_t threadEffectivePeriod_ms[NUM_THREADS] = { 0, 0, 0, 0, 0 };
 volatile uint32_t threadCycle_ms[NUM_THREADS] = { 0, 0, 0, 0, 0 };
 
@@ -61,6 +65,99 @@ typedef struct {
 
 systemLoad_t sysLoad;
 
+
+
+//—————————————————————————————————————————————————————————————————————————————————
+//———————————————————————————————————TOP THREAD————————————————————————————————————
+//—————————————————————————————————————————————————————————————————————————————————
+
+//------------------------------------------------------------------------------
+// Load Balancer (for top)
+//------------------------------------------------------------------------------
+void balanceLoad(){
+  // Calcula la carga total del sistema
+  float totalSystemLoad = 0;
+  for (int tid = 1; tid < NUM_THREADS; tid++) {
+      totalSystemLoad += sysLoad.threadLoad[tid].loadPerCycle_per;
+  }
+    
+  // Ajusta la intensidad de carga de cada hebra
+  for (int tid = 1; tid < NUM_THREADS; tid++) {
+      if (totalSystemLoad < 85.0) {
+          // Si la carga total es menor que el 85%, aumenta la carga de la hebra si es posible
+          if (threadLoad[tid] < threadMaxLoad[tid]) {
+              threadLoad[tid]++;
+          }
+      } else {
+          // Si la carga total es mayor que el 85%, reduce la carga de la hebra si es posible
+          if (threadLoad[tid] > threadMinLoad[tid]) {
+              threadLoad[tid]--;
+          }
+      }
+  }
+}
+
+//------------------------------------------------------------------------------
+// Initialize LED
+//------------------------------------------------------------------------------
+static void initializeLed() {
+    bool ledState = LOW;
+    pinMode(LED_BUILTIN, OUTPUT);
+    digitalWrite(LED_BUILTIN, ledState);
+}
+//------------------------------------------------------------------------------
+// Toggle LED state
+//------------------------------------------------------------------------------
+static bool toggleLedState(bool ledState) {
+    ledState = (ledState == HIGH) ? LOW : HIGH;
+    digitalWrite(LED_BUILTIN, ledState);
+    return ledState;
+}
+
+//------------------------------------------------------------------------------
+// Collect ticks for each thread
+//------------------------------------------------------------------------------
+static uint32_t collectThreadTicks(systime_t lastTime_i) {
+    /*     
+      SerialUSB.print(tid);
+      SerialUSB.print(" ");
+      SerialUSB.println(ticks);
+    */
+    uint32_t accumTicks = 0;
+    
+    for (int tid = 1; tid < NUM_THREADS; tid++) {
+        threadLoad_t * thdLoad = &(sysLoad.threadLoad[tid]);
+        thdLoad->lastSampleTime_i = lastTime_i;
+        systime_t ticks = chThdGetTicksX(thdLoad->thd);
+        thdLoad->ticksPerCycle = ticks - thdLoad->ticksTotal;
+        thdLoad->ticksTotal = ticks;
+        accumTicks += thdLoad->ticksPerCycle;
+    }
+
+    return accumTicks;
+}
+
+//------------------------------------------------------------------------------
+// Print thread stats
+//------------------------------------------------------------------------------
+
+static void printThreadStats(uint32_t accumTicks) {
+    for (int tid = 1; tid < NUM_THREADS; tid++) {
+        threadLoad_t * thdLoad = &sysLoad.threadLoad[tid];
+        thdLoad->loadPerCycle_per = (100 * (float)thdLoad->ticksPerCycle) / accumTicks;
+        SerialUSB.print(thread_name[tid]);
+        SerialUSB.print("  ticks(last cycle): ");
+        SerialUSB.print(thdLoad->ticksPerCycle);
+        SerialUSB.print("  CPU(%): ");
+        SerialUSB.print(thdLoad->loadPerCycle_per);
+        SerialUSB.print("   Cycle duration(ms): ");
+        SerialUSB.print(threadCycle_ms[tid]);
+        SerialUSB.print("  period(ms): ");
+        SerialUSB.println(threadEffectivePeriod_ms[tid]);
+    }
+    SerialUSB.println();
+}
+
 //------------------------------------------------------------------------------
 // Load estimator (top)
 // High priority thread that executes periodically
@@ -68,74 +165,43 @@ systemLoad_t sysLoad;
 BSEMAPHORE_DECL(top_sem, true);
 static THD_WORKING_AREA(waTop, 256);
 
-static THD_FUNCTION(top, arg) 
-{
-  (void)arg;
-  bool ledState = LOW;
-
-  pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, ledState);
-
-  // Initialize sysLoad struct
-  memset(&sysLoad, 0, sizeof(sysLoad));
-
-  systime_t lastTime_i = 0;
-  systime_t period_i = TIME_MS2I(CYCLE_MS);
-  
-  // Reset top_sem as "taken"
-  chBSemReset(&top_sem, true);
-
-  while (!chThdShouldTerminateX()) {
+static THD_FUNCTION(top, arg) {
+    (void)arg;
     
-    // Wait a certain amount of time
-    // chThdSleepMilliseconds(CYCLE_MS);
-    systime_t deadline_i = lastTime_i + period_i;
-    if (deadline_i > chVTGetSystemTimeX()) {
-      chBSemWaitTimeout(&top_sem, sysinterval_t(deadline_i - chVTGetSystemTimeX()));
+    // Initialize systems
+    initializeLed();
+    memset(&sysLoad, 0, sizeof(sysLoad));
+    systime_t lastTime_i = 0;
+    systime_t period_i = TIME_MS2I(CYCLE_MS);
+    chBSemReset(&top_sem, true);
+
+    bool ledState = LOW;
+
+    while (!chThdShouldTerminateX()) {
+        // Wait for the specified cycle time
+        systime_t deadline_i = lastTime_i + period_i;
+        if (deadline_i > chVTGetSystemTimeX()) {
+            chBSemWaitTimeout(&top_sem, sysinterval_t(deadline_i - chVTGetSystemTimeX()));
+        }
+        
+        lastTime_i = chVTGetSystemTimeX();
+
+        // Collect and process thread ticks
+        uint32_t accumTicks = collectThreadTicks(lastTime_i);
+        
+        // Print statistics
+        printThreadStats(accumTicks);
+
+        // Toggle LED state
+        ledState = toggleLedState(ledState);
     }
-    
-    // Accumulated ticks for this cycle
-    uint32_t accumTicks = 0;
-    
-    // This assumes that no other thread will accumulate ticks during this sampling
-    // so we can use this timestamp for all threads 
-    lastTime_i = chVTGetSystemTimeX();
-
-    // tid starts at 1 because we do not include this thread (top)
-    for (int tid = 1; tid < NUM_THREADS; tid++) {
-      threadLoad_t * thdLoad = &(sysLoad.threadLoad[tid]);
-      thdLoad->lastSampleTime_i = lastTime_i;
-      systime_t ticks = chThdGetTicksX(thdLoad->thd);
-/*     
-      SerialUSB.print(tid);
-      SerialUSB.print(" ");
-      SerialUSB.println(ticks);
-*/
-      thdLoad->ticksPerCycle = ticks - thdLoad->ticksTotal;
-      thdLoad->ticksTotal = ticks;
-      accumTicks += thdLoad->ticksPerCycle;
-    }
-    
-    for (int tid = 1; tid < NUM_THREADS; tid++) {
-      threadLoad_t * thdLoad = &sysLoad.threadLoad[tid];
-      thdLoad->loadPerCycle_per = (100 * (float)thdLoad->ticksPerCycle) / accumTicks;
-      SerialUSB.print(thread_name[tid]);
-      SerialUSB.print("  ticks(last cycle): ");
-      SerialUSB.print(thdLoad->ticksPerCycle);
-      SerialUSB.print("  CPU(%): ");
-      SerialUSB.print(thdLoad->loadPerCycle_per);
-      SerialUSB.print("   Cycle duration(ms): ");
-      SerialUSB.print(threadCycle_ms[tid]);
-      SerialUSB.print("  period(ms): ");
-      SerialUSB.println(threadEffectivePeriod_ms[tid]);
-    }
-    SerialUSB.println();
-    
-    // Switch the led state
-    ledState = (ledState == HIGH) ? LOW : HIGH;
-    digitalWrite(LED_BUILTIN, ledState);
-  }
 }
+
+//—————————————————————————————————————————————————————————————————————————————————
+//—————————————————————————————————————————————————————————————————————————————————
+//—————————————————————————————————————————————————————————————————————————————————
+
+
 
 //------------------------------------------------------------------------------
 // Worker thread executes periodically
