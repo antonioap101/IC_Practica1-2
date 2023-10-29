@@ -93,8 +93,6 @@ static void printThreadLoad(){
     Serial.print(", worker_3 = " );
     Serial.print(threadLoad[3]);
     Serial.println((period_difference[3] == 0) ? "S" : (period_difference[3] > 0)? "U+":"U-");
-
-
 }
 
 //------------------------------------------------------------------------------
@@ -137,7 +135,7 @@ static void tryIncreaseAllThreadsLoad() {
 
 static void decreaseAllThreadsLoad(){
   for (int tid = 1; tid < NUM_THREADS-1; tid++) 
-      threadLoad[tid] = max(threadLoad[tid] - 1, threadMinLoad[tid]);
+      threadLoad[tid] = max(threadLoad[tid] - 2, threadMinLoad[tid]);
 }
 //------------------------------------------------------------------------------
 // Load Balancer (for top)
