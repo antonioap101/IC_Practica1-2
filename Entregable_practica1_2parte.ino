@@ -23,30 +23,43 @@
 \* ======================================================================= */ 
 #include <ChRt.h>
 #include <math.h>
-
+//#include <../ChibiOS-master/src/ChRt.h>
 //------------------------------------------------------------------------------
 // Parametrization
 //------------------------------------------------------------------------------
-#define USE_DOUBLE    FALSE   // Change to TRUE to use double precision (heavier)
+#define EXTRA         true    // Cambiar a TRUE para activar el apartado extra (carga aleatoria)
+#define USE_DOUBLE    false   // Change to TRUE to use double precision (heavier)
 
 #define CYCLE_MS      1000
 #define NUM_THREADS   5  // Three working threads + loadEstimator (top) + 
                          // loop (as the idle thread)
                          // TOP thread is thread with id 0
 
+
+#define LOAD_THRESHOLD 85.0  // Umbral de trabajo a 85%
+
+#define BALANCED_STATUS LOAD_THRESHOLD / (NUM_THREADS-2)
+
+#define TOTAL_SYSTEM_LOAD 100 - sysLoad.threadLoad[4].loadPerCycle_per // Carga total de trabajo del sistema
+
 char thread_name[NUM_THREADS][15] = { "top", 
-                                       "worker_1", "worker_2", "worker_3",
-                                       "idle" };
+                                      "worker_1", "worker_2", "worker_3",
+                                      "idle" };
 
 volatile uint32_t threadPeriod_ms[NUM_THREADS] = { CYCLE_MS, 200, 100, 200, 0 };
-volatile int threadLoad[NUM_THREADS] = {0, 50, 50, 50, 0};
 
 // Define un valor mínimo y máximo de carga para cada hebra
-volatile int threadMinLoad[NUM_THREADS] = {0, 20, 20, 20, 0}; // Por ejemplo, estos valores pueden ser ajustados según las necesidades.
-volatile int threadMaxLoad[NUM_THREADS] = {0, 100, 100, 100, 0}; // Establece un valor máximo arbitrario. Se puede ajustar según las necesidades.
+volatile int threadMinLoad[NUM_THREADS] = {0, 50, 50, 50, 0}; // Por ejemplo, estos valores pueden ser ajustados según las necesidades.
+volatile int threadMaxLoad[NUM_THREADS] = {0, 290, 290, 290, 0}; // Establece un valor máximo arbitrario. Se puede ajustar según las necesidades.
+
+// Comenzamos definiendo la carga inicial de las hebras como el mínimo
+volatile int threadLoad[NUM_THREADS] = {0, 50, 50, 50, 0};
 
 volatile uint32_t threadEffectivePeriod_ms[NUM_THREADS] = { 0, 0, 0, 0, 0 };
 volatile uint32_t threadCycle_ms[NUM_THREADS] = { 0, 0, 0, 0, 0 };
+
+
+volatile int32_t period_difference[NUM_THREADS] = {0, 0, 0, 0, 0}; // Array que define el estado de conformidad de las hebras con su periodo establecido
 
 // Struct to measure the cpu load using the ticks consumed by each thread
 typedef struct {
@@ -58,6 +71,7 @@ typedef struct {
   float loadPerCycle_per;
 } threadLoad_t;
 
+
 typedef struct {
   threadLoad_t threadLoad[NUM_THREADS];
   uint32_t idling_per;
@@ -65,36 +79,78 @@ typedef struct {
 
 systemLoad_t sysLoad;
 
+//------------------------------------------------------------------------------
+// Print thread Load And Period Stability
+//------------------------------------------------------------------------------
+static void printThreadLoad(){
+    Serial.print("THREAD_LOAD: ");
+    Serial.print("worker_1 = " );
+    Serial.print(threadLoad[1]);
+    Serial.print((period_difference[1] == 0) ? "S" : (period_difference[1] > 0)? "U+":"U-");
+    Serial.print(", worker_2 = " );
+    Serial.print(threadLoad[2]);
+    Serial.print((period_difference[2] == 0) ? "S" : (period_difference[2] > 0)? "U+":"U-");
+    Serial.print(", worker_3 = " );
+    Serial.print(threadLoad[3]);
+    Serial.println((period_difference[3] == 0) ? "S" : (period_difference[3] > 0)? "U+":"U-");
 
 
-//—————————————————————————————————————————————————————————————————————————————————
-//———————————————————————————————————TOP THREAD————————————————————————————————————
-//—————————————————————————————————————————————————————————————————————————————————
+}
 
+//------------------------------------------------------------------------------
+// Print thread stats
+//------------------------------------------------------------------------------
+static void printThreadStats(uint32_t accumTicks) {
+    // Mostramos la carga de cada una de las hebras
+    printThreadLoad();
+    for (int tid = 1; tid < NUM_THREADS; tid++) {
+        threadLoad_t * thdLoad = &sysLoad.threadLoad[tid];
+        thdLoad->loadPerCycle_per = (100 * (float)thdLoad->ticksPerCycle) / accumTicks;
+        SerialUSB.print(thread_name[tid]);
+        SerialUSB.print("  ticks(last cycle): "); SerialUSB.print(thdLoad->ticksPerCycle);
+        SerialUSB.print("  CPU(%): "); SerialUSB.print(thdLoad->loadPerCycle_per);
+        SerialUSB.print("   Cycle duration(ms): "); SerialUSB.print(threadCycle_ms[tid]);
+        SerialUSB.print("  period(ms): "); SerialUSB.println(threadEffectivePeriod_ms[tid]);
+    }
+    SerialUSB.println();
+}
+
+
+static void checkAndCorrectPeriodDifference() {
+  for (int tid = 1; tid < NUM_THREADS-1; tid++) {
+    period_difference[tid] = threadEffectivePeriod_ms[tid] - threadPeriod_ms[tid]; // Obtenemos: {-2, 5, -3}  => Aumentamos 1 y 3 | Disminuimos 2 // Obtenemos: {1, -5, 4}   =>  Aumentamos 2     | Disminuimos 1 y 3        
+    if (period_difference[tid] != 0){
+      threadLoad[tid] = (period_difference[tid] > 0) // Si el periodo es superior al establecido, se disminuye la carga, si no se aumenta
+                        ? max(threadLoad[tid] - 1, threadMinLoad[tid])
+                        : min(threadLoad[tid] + 1, threadMaxLoad[tid]); 
+    }
+  }                                                                 
+}
+
+static void tryIncreaseAllThreadsLoad() {
+  for (int tid = 1; tid < NUM_THREADS - 1; tid++) {
+    threadLoad[tid] = (sysLoad.threadLoad[tid].loadPerCycle_per > BALANCED_STATUS) 
+                      ? max(threadLoad[tid] - 1, threadMinLoad[tid]) 
+                      : min(threadLoad[tid] + (EXTRA ? random(1, 16) : 1), threadMaxLoad[tid]);
+  }
+}
+
+static void decreaseAllThreadsLoad(){
+  for (int tid = 1; tid < NUM_THREADS-1; tid++) 
+      threadLoad[tid] = max(threadLoad[tid] - 1, threadMinLoad[tid]);
+}
 //------------------------------------------------------------------------------
 // Load Balancer (for top)
 //------------------------------------------------------------------------------
-void balanceLoad(){
-  // Calcula la carga total del sistema
-  float totalSystemLoad = 0;
-  for (int tid = 1; tid < NUM_THREADS; tid++) {
-      totalSystemLoad += sysLoad.threadLoad[tid].loadPerCycle_per;
-  }
-    
-  // Ajusta la intensidad de carga de cada hebra
-  for (int tid = 1; tid < NUM_THREADS; tid++) {
-      if (totalSystemLoad < 85.0) {
-          // Si la carga total es menor que el 85%, aumenta la carga de la hebra si es posible
-          if (threadLoad[tid] < threadMaxLoad[tid]) {
-              threadLoad[tid]++;
-          }
-      } else {
-          // Si la carga total es mayor que el 85%, reduce la carga de la hebra si es posible
-          if (threadLoad[tid] > threadMinLoad[tid]) {
-              threadLoad[tid]--;
-          }
-      }
-  }
+static void balanceLoad() {
+
+  // Determina la estabilidad entre los periodos y realiza las correcciones necesarias
+  //checkAndCorrectPeriodDifference();                                           
+
+  // Si la carga total es inferior a la óptima se aumenta
+  if (TOTAL_SYSTEM_LOAD < LOAD_THRESHOLD) tryIncreaseAllThreadsLoad();
+  else decreaseAllThreadsLoad();
+     
 }
 
 //------------------------------------------------------------------------------
@@ -105,6 +161,7 @@ static void initializeLed() {
     pinMode(LED_BUILTIN, OUTPUT);
     digitalWrite(LED_BUILTIN, ledState);
 }
+
 //------------------------------------------------------------------------------
 // Toggle LED state
 //------------------------------------------------------------------------------
@@ -118,11 +175,7 @@ static bool toggleLedState(bool ledState) {
 // Collect ticks for each thread
 //------------------------------------------------------------------------------
 static uint32_t collectThreadTicks(systime_t lastTime_i) {
-    /*     
-      SerialUSB.print(tid);
-      SerialUSB.print(" ");
-      SerialUSB.println(ticks);
-    */
+
     uint32_t accumTicks = 0;
     
     for (int tid = 1; tid < NUM_THREADS; tid++) {
@@ -138,27 +191,6 @@ static uint32_t collectThreadTicks(systime_t lastTime_i) {
 }
 
 //------------------------------------------------------------------------------
-// Print thread stats
-//------------------------------------------------------------------------------
-
-static void printThreadStats(uint32_t accumTicks) {
-    for (int tid = 1; tid < NUM_THREADS; tid++) {
-        threadLoad_t * thdLoad = &sysLoad.threadLoad[tid];
-        thdLoad->loadPerCycle_per = (100 * (float)thdLoad->ticksPerCycle) / accumTicks;
-        SerialUSB.print(thread_name[tid]);
-        SerialUSB.print("  ticks(last cycle): ");
-        SerialUSB.print(thdLoad->ticksPerCycle);
-        SerialUSB.print("  CPU(%): ");
-        SerialUSB.print(thdLoad->loadPerCycle_per);
-        SerialUSB.print("   Cycle duration(ms): ");
-        SerialUSB.print(threadCycle_ms[tid]);
-        SerialUSB.print("  period(ms): ");
-        SerialUSB.println(threadEffectivePeriod_ms[tid]);
-    }
-    SerialUSB.println();
-}
-
-//------------------------------------------------------------------------------
 // Load estimator (top)
 // High priority thread that executes periodically
 //------------------------------------------------------------------------------
@@ -168,8 +200,8 @@ static THD_WORKING_AREA(waTop, 256);
 static THD_FUNCTION(top, arg) {
     (void)arg;
     
-    // Initialize systems
     initializeLed();
+
     memset(&sysLoad, 0, sizeof(sysLoad));
     systime_t lastTime_i = 0;
     systime_t period_i = TIME_MS2I(CYCLE_MS);
@@ -188,6 +220,9 @@ static THD_FUNCTION(top, arg) {
 
         // Collect and process thread ticks
         uint32_t accumTicks = collectThreadTicks(lastTime_i);
+
+        // En este momento se realiza el balanceo de carga en caso necesario
+        balanceLoad();
         
         // Print statistics
         printThreadStats(accumTicks);
@@ -196,11 +231,6 @@ static THD_FUNCTION(top, arg) {
         ledState = toggleLedState(ledState);
     }
 }
-
-//—————————————————————————————————————————————————————————————————————————————————
-//—————————————————————————————————————————————————————————————————————————————————
-//—————————————————————————————————————————————————————————————————————————————————
-
 
 
 //------------------------------------------------------------------------------
@@ -221,13 +251,13 @@ static THD_FUNCTION(worker, arg)
     systime_t beginTime_i = chVTGetSystemTimeX();
     threadEffectivePeriod_ms[worker_ID] = TIME_I2MS(beginTime_i - lastBeginTime_i);
     
-    int niter = threadLoad[worker_ID];
     #if USE_DOUBLE
       double num = 10;
     #else
       float num = 10;
     #endif
     
+    int niter = threadLoad[worker_ID];
     for (int iter = 0; iter < niter; iter++) {
       #if USE_DOUBLE
         num = exp(num) / (1 + exp(num));
@@ -238,13 +268,6 @@ static THD_FUNCTION(worker, arg)
     
     deadline_i += period_i;
     
-/*
-    SerialUSB.print(worker_ID);
-    SerialUSB.print(" ");
-    SerialUSB.print(deadline_i);
-    SerialUSB.print(" ");
-    SerialUSB.println(chVTGetSystemTimeX());
-*/
     lastBeginTime_i = beginTime_i;
     threadCycle_ms[worker_ID] = TIME_I2MS(chVTGetSystemTimeX() - beginTime_i);
     if (deadline_i > chVTGetSystemTimeX()) {

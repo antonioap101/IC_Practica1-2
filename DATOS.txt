@@ -1,0 +1,83 @@
+volatile int threadLoad[NUM_THREADS] = {0, 10, 10, 10, 0};
+worker_1  ticks(last cycle): 10  CPU(%): 1.00   Cycle duration(ms): 1  period(ms): 200
+worker_2  ticks(last cycle): 20  CPU(%): 2.00   Cycle duration(ms): 1  period(ms): 100
+worker_3  ticks(last cycle): 10  CPU(%): 1.00   Cycle duration(ms): 2  period(ms): 200
+idle  ticks(last cycle): 958  CPU(%): 95.99   Cycle duration(ms): 0  period(ms): 0
+
+worker_1  ticks(last cycle): 10  CPU(%): 1.00   Cycle duration(ms): 1  period(ms): 200
+worker_2  ticks(last cycle): 20  CPU(%): 2.00   Cycle duration(ms): 1  period(ms): 100
+worker_3  ticks(last cycle): 10  CPU(%): 1.00   Cycle duration
+
+CON THREAD LOAD = 10
+------------------------------------------------------------------------------------
+worker_1  ticks(last cycle): 10  CPU(%): 1.00   Cycle duration(ms): 1  period(ms): 200
+worker_2  ticks(last cycle): 20  CPU(%): 2.01   Cycle duration(ms): 1  period(ms): 100
+worker_3  ticks(last cycle): 10  CPU(%): 1.00   Cycle duration(ms): 1  period(ms): 200
+idle  ticks(last cycle): 957  CPU(%): 95.99   Cycle duration(ms): 0  period(ms): 0
+
+worker_1  ticks(last cycle): 10  CPU(%): 1.01   Cycle duration(ms): 1  period(ms): 200
+worker_2  ticks(last cycle): 20  CPU(%): 2.01   Cycle duration(ms): 1  period(ms): 100
+worker_3  ticks(last cycle): 10  CPU(%): 1.01   Cycle duration(ms): 1  period(ms): 200
+idle  ticks(last cycle): 953  CPU(%): 95.97   Cycle duration(ms): 0  period(ms): 0
+
+worker_1  ticks(last cycle): 10  CPU(%): 1.00   Cycle duration(ms): 1  period(ms): 200
+worker_2  ticks(last cycle): 20  CPU(%): 2.01   Cycle duration(ms): 1  period(ms): 100
+worker_3  ticks(last cycle): 10  CPU(%): 1.00   Cycle duration(ms): 1  period(ms): 200
+idle  ticks(last cycle): 956  CPU(%): 95.98   Cycle duration(ms): 0  period(ms): 0
+
+
+CON THREAD LOAD = 50
+------------------------------------------------------------------------------------
+worker_1  ticks(last cycle): 46  CPU(%): 4.63   Cycle duration(ms): 9  period(ms): 200
+worker_2  ticks(last cycle): 95  CPU(%): 9.56   Cycle duration(ms): 9  period(ms): 100
+worker_3  ticks(last cycle): 50  CPU(%): 5.03   Cycle duration(ms): 10  period(ms): 200
+idle  ticks(last cycle): 803  CPU(%): 80.78   Cycle duration(ms): 0  period(ms): 0
+
+worker_1  ticks(last cycle): 46  CPU(%): 4.63   Cycle duration(ms): 9  period(ms): 200
+worker_2  ticks(last cycle): 95  CPU(%): 9.56   Cycle duration(ms): 9  period(ms): 100
+worker_3  ticks(last cycle): 50  CPU(%): 5.03   Cycle duration(ms): 10  period(ms): 200
+idle  ticks(last cycle): 803  CPU(%): 80.78   Cycle duration(ms): 0  period(ms): 0
+
+worker_1  ticks(last cycle): 46  CPU(%): 4.63   Cycle duration(ms): 9  period(ms): 200
+worker_2  ticks(last cycle): 95  CPU(%): 9.56   Cycle duration(ms): 9  period(ms): 100
+worker_3  ticks(last cycle): 50  CPU(%): 5.03   Cycle duration(ms): 10  period(ms): 200
+idle  ticks(last cycle): 803  CPU(%): 80.78   Cycle duration(ms): 0  period(ms): 0
+
+
+
+CON THREAD LOAD = 400
+------------------------------------------------------------------------------------
+
+worker_1  ticks(last cycle): 340  CPU(%): 51.20   Cycle duration(ms): 239  period(ms): 239
+worker_2  ticks(last cycle): 324  CPU(%): 48.80   Cycle duration(ms): 238  period(ms): 238
+worker_3  ticks(last cycle): 0  CPU(%): 0.00   Cycle duration(ms): 239  period(ms): 239
+idle  ticks(last cycle): 0  CPU(%): 0.00   Cycle duration(ms): 0  period(ms): 0
+
+worker_1  ticks(last cycle): 320  CPU(%): 48.78   Cycle duration(ms): 238  period(ms): 238
+worker_2  ticks(last cycle): 336  CPU(%): 51.22   Cycle duration(ms): 239  period(ms): 239
+worker_3  ticks(last cycle): 0  CPU(%): 0.00   Cycle duration(ms): 239  period(ms): 239
+idle  ticks(last cycle): 0  CPU(%): 0.00   Cycle duration(ms): 0  period(ms): 0
+
+worker_1  ticks(last cycle): 340  CPU(%): 50.30   Cycle duration(ms): 239  period(ms): 239
+worker_2  ticks(last cycle): 336  CPU(%): 49.70   Cycle duration(ms): 239  period(ms): 239
+worker_3  ticks(last cycle): 0  CPU(%): 0.00   Cycle duration(ms): 239  period(ms): 239
+idle  ticks(last cycle): 0  CPU(%): 0.00   Cycle duration(ms): 0  period(ms): 0
+
+
+CON THREAD LOAD = 200
+------------------------------------------------------------------------------------
+
+worker_1  ticks(last cycle): 196  CPU(%): 19.64   Cycle duration(ms): 39  period(ms): 200
+worker_2  ticks(last cycle): 390  CPU(%): 39.08   Cycle duration(ms): 39  period(ms): 100
+worker_3  ticks(last cycle): 196  CPU(%): 19.64   Cycle duration(ms): 39  period(ms): 200
+idle  ticks(last cycle): 216  CPU(%): 21.64   Cycle duration(ms): 0  period(ms): 0
+
+worker_1  ticks(last cycle): 195  CPU(%): 19.64   Cycle duration(ms): 39  period(ms): 200
+worker_2  ticks(last cycle): 391  CPU(%): 39.38   Cycle duration(ms): 39  period(ms): 100
+worker_3  ticks(last cycle): 195  CPU(%): 19.64   Cycle duration(ms): 39  period(ms): 200
+idle  ticks(last cycle): 212  CPU(%): 21.35   Cycle duration(ms): 0  period(ms): 0
+
+worker_1  ticks(last cycle): 195  CPU(%): 19.64   Cycle duration(ms): 39  period(ms): 200
+worker_2  ticks(last cycle): 390  CPU(%): 39.27   Cycle duration(ms): 39  period(ms): 100
+worker_3  ticks(last cycle): 196  CPU(%): 19.74   Cycle duration(ms): 39  period(ms): 200
+idle  ticks(last cycle): 212  CPU(%): 21.35   Cycle duration(ms): 0  period(ms): 0
